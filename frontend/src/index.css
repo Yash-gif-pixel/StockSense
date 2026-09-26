@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --color-signal: var(--signal);
+    --color-signal-foreground: var(--signal-foreground);
+    --color-signal-ink: var(--signal-ink);
+    --color-ember: var(--ember);
+    --color-ember-ink: var(--ember-ink);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Theme — nexus-studio palette (ink / mist / signal lime / ember), light + dark.
+   Dark is the repo's own look. Light is derived from it: mist grounds, ink text, and the lime
+   kept as a FILL (with ink text on it); as text on white it is unreadable, so light mode reads
+   it through --signal-ink, an olive that clears AA (6.6:1 on white). All text pairs below were
+   checked for WCAG AA. */
+:root {
+    --background: #f7f7fb;
+    --foreground: #08081a;
+    --card: #ffffff;
+    --card-foreground: #08081a;
+    --popover: #ffffff;
+    --popover-foreground: #08081a;
+    --primary: #e8ff47;
+    --primary-foreground: #04040a;
+    --secondary: #ececf4;
+    --secondary-foreground: #0d0d1f;
+    --muted: #ececf4;
+    --muted-foreground: #5a5a78;
+    --accent: #ececf4;
+    --accent-foreground: #0d0d1f;
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: #dcdcec;
+    --input: #d2d2e4;
+    --ring: #1a1a3e;
+    --signal: #e8ff47;
+    --signal-foreground: #04040a;
+    --signal-ink: #556300;
+    --ember: #ff6b35;
+    --ember-ink: #c2410c;
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #08081a;
+    --sidebar-primary: #e8ff47;
+    --sidebar-primary-foreground: #04040a;
+    --sidebar-accent: #ececf4;
+    --sidebar-accent-foreground: #0d0d1f;
+    --sidebar-border: #dcdcec;
+    --sidebar-ring: #1a1a3e;
+}
+
+.dark {
+    --background: #04040a;
+    --foreground: #f0f0f8;
+    --card: #0b0b19;
+    --card-foreground: #f0f0f8;
+    --popover: #0d0d1f;
+    --popover-foreground: #f0f0f8;
+    --primary: #e8ff47;
+    --primary-foreground: #04040a;
+    --secondary: #12122e;
+    --secondary-foreground: #f0f0f8;
+    --muted: #0d0d1f;
+    --muted-foreground: #9898b8;
+    --accent: #12122e;
+    --accent-foreground: #f0f0f8;
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: #1a1a3e;
+    --input: #22224a;
+    --ring: #e8ff47;
+    --signal: #e8ff47;
+    --signal-foreground: #04040a;
+    --signal-ink: #e8ff47;
+    --ember: #ff6b35;
+    --ember-ink: #ff6b35;
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: #080812;
+    --sidebar-foreground: #f0f0f8;
+    --sidebar-primary: #e8ff47;
+    --sidebar-primary-foreground: #04040a;
+    --sidebar-accent: #12122e;
+    --sidebar-accent-foreground: #f0f0f8;
+    --sidebar-border: #1a1a3e;
+    --sidebar-ring: #e8ff47;
+    color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+/* ---------- Print ---------- */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  html,
+  body {
+    background: white !important;
+  }
+  /* Toasts and dialogs never belong on paper. */
+  [data-sonner-toaster],
+  [role='dialog'] {
+    display: none !important;
+  }
+}
+
+/* ---------- Landing (from nexus-studio) ---------- */
+@theme {
+    --animate-marquee: marquee 25s linear infinite;
+    --animate-marquee-reverse: marquee 25s linear infinite reverse;
+    --animate-pulse-slow: pulse 4s ease-in-out infinite;
+    @keyframes marquee {
+        0% { transform: translateX(0%); }
+        100% { transform: translateX(-50%); }
+    }
+}
+
+/* outline type: the stroke takes the text colour and only the FILL goes transparent (setting
+   color: transparent would make currentColor, and so the stroke, invisible too) */
+@utility text-stroke {
+    -webkit-text-stroke: 1.5px currentColor;
+    -webkit-text-fill-color: transparent;
+}
+
+@utility clip-diagonal {
+    clip-path: polygon(0 0, 100% 0, 100% 92%, 0 100%);
+}
+
+/* film grain over a section: an SVG noise tile at 4% */
+@utility grain {
+    position: relative;
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-marquee,
+    .animate-marquee-reverse,
+    .animate-pulse-slow {
+        animation: none;
+    }
+}

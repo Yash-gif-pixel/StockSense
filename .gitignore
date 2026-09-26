@@ -29,3 +29,9 @@ htmlcov/
 .vscode/
 *.swp
 .DS_Store
+
+# Frontend
+node_modules/
+dist/
+dist-ssr/
+
