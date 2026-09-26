@@ -1,0 +1,30 @@
+[project]
+name = "stocksense-backend"
+version = "0.1.0"
+description = "StockSense inventory management backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.54.0",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "sqlalchemy==2.1.1",
+    "psycopg[binary]==3.3.6",
+    "alembic==1.20.0",
+    "argon2-cffi==25.1.0",
+    "pyjwt==2.15.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "httpx2==2.13.1",
+]
+
+# Dependency-only project: nothing here is built or installed as a wheel.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
