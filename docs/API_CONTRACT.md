@@ -2,10 +2,10 @@
 
 ## Conventions
 * Base path: /api. JSON only. Field names snake_case. IDs are integers.
-* Dates: scheduled_date is "YYYY-MM-DD". Timestamps are ISO 8601 with timezone offset.
+* Dates: scheduled_date is "YYYY-MM-DD". Timestamps are ISO 8601 in UTC with a trailing Z (e.g. 2026-09-26T06:25:47.304422Z).
 * Quantities and money are JSON numbers.
 * Auth: POST /api/auth/login sets an httpOnly cookie. Every endpoint except signup/login/forgot/reset requires it; otherwise 401.
-* Errors (all non-2xx): {"code": "string", "message": "human readable", "fields": {"field_name": "message"}}  (fields only on validation errors, and on conflict when a specific field caused it)
+* Errors (all non-2xx): {"code": "string", "message": "human readable", "fields": {"field_name": "message"}}  (fields present on validation_error, and on conflict when a specific field caused it)
   Codes: validation_error (422), unauthorized (401), not_found (404), conflict (409), invalid_state (409), insufficient_stock (409)
 * Lists: {"items": [...], "total": n}. Query params limit (default 50, max 200), offset (default 0).
 
