@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 from app.models.catalog import Location, Product
 from app.models.enums import MoveDirection
+from app.models.operation import Operation
 
 
 class StockMove(Base):
@@ -43,11 +44,21 @@ class StockMove(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    operation: Mapped[Operation] = relationship(lazy="joined")
     product: Mapped[Product] = relationship(lazy="joined")
     from_location: Mapped[Location] = relationship(
         foreign_keys=[from_location_id], lazy="joined"
     )
     to_location: Mapped[Location] = relationship(foreign_keys=[to_location_id], lazy="joined")
+
+    @property
+    def reference(self) -> str:
+        """The contract puts the document reference on the move row itself."""
+        return self.operation.reference
+
+    @property
+    def contact(self) -> str | None:
+        return self.operation.contact
 
     @property
     def direction(self) -> MoveDirection:
@@ -81,8 +92,10 @@ class StockQuant(Base):
         Numeric(12, 3), nullable=False, default=Decimal("0"), server_default=text("0")
     )
 
-    product: Mapped[Product] = relationship(lazy="joined")
-    location: Mapped[Location] = relationship(lazy="joined")
+    # Deliberately NOT lazy="joined": these rows are read with SELECT ... FOR UPDATE,
+    # and Postgres rejects row locking on the nullable side of an outer join.
+    product: Mapped[Product] = relationship()
+    location: Mapped[Location] = relationship()
 
     @property
     def free_to_use(self) -> Decimal:

@@ -76,8 +76,8 @@ def client(db: Session) -> Generator["TestClient", None, None]:  # noqa: F821
 
 
 CREDENTIALS = {
-    "login_id": "demo_user",
-    "email": "demo@example.com",
+    "login_id": "test_user",
+    "email": "test@example.com",
     "password": "Valid@Pass1",
 }
 
@@ -113,3 +113,40 @@ def sent_otps(monkeypatch) -> list[tuple[str, str]]:
     sent: list[tuple[str, str]] = []
     monkeypatch.setattr(mail, "send_otp_email", lambda to, otp: sent.append((to, otp)))
     return sent
+
+
+@pytest.fixture
+def seed_data(db):
+    """Run the seed and hand back the objects tests keep reaching for."""
+    from types import SimpleNamespace
+
+    from sqlalchemy import select
+
+    from app.models import Category, Location, LocationType, Product, Warehouse
+    from scripts.seed import seed
+
+    seed(db)
+    db.flush()
+
+    def location(short_code):
+        return db.scalar(select(Location).where(Location.short_code == short_code))
+
+    return SimpleNamespace(
+        warehouse=db.scalar(select(Warehouse).where(Warehouse.short_code == "WH")),
+        stock1=location("Stock1"),
+        stock2=location("Stock2"),
+        vendors=db.scalar(select(Location).where(Location.type == LocationType.vendor)),
+        customers=db.scalar(select(Location).where(Location.type == LocationType.customer)),
+        adjustment=db.scalar(
+            select(Location).where(Location.type == LocationType.adjustment)
+        ),
+        furniture=db.scalar(select(Category).where(Category.name == "Furniture")),
+        desk=db.scalar(select(Product).where(Product.sku == "DESK001")),
+        table=db.scalar(select(Product).where(Product.sku == "TABLE001")),
+    )
+
+
+@pytest.fixture
+def api(logged_in_client, seed_data):
+    """An authenticated client against a seeded database."""
+    return logged_in_client

@@ -67,9 +67,9 @@ class Location(Base):
 
     @property
     def full_name(self) -> str:
-        """"WH/Stock1" for internal locations, plain name for virtual ones."""
+        """"WH/Stock1" for internal locations, the plain name for virtual ones."""
         if self.warehouse is not None:
-            return f"{self.warehouse.short_code}/{self.name}"
+            return f"{self.warehouse.short_code}/{self.short_code}"
         return self.name
 
     @property

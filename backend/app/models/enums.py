@@ -29,3 +29,16 @@ class MoveDirection(str, enum.Enum):
     in_ = "in"
     out = "out"
     internal = "internal"
+
+
+class AdjustReason(str, enum.Enum):
+    count = "count"
+    damaged = "damaged"
+    lost = "lost"
+    other = "other"
+
+
+class StockStatus(str, enum.Enum):
+    ok = "ok"
+    low = "low"
+    out = "out"

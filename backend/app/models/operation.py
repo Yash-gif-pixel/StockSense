@@ -10,19 +10,31 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.clock import today
 from app.models.base import Base
 from app.models.catalog import Location, Product
 from app.models.enums import OperationStatus, OperationType
 from app.models.user import User
 
+PENDING_STATUSES = (
+    OperationStatus.draft,
+    OperationStatus.waiting,
+    OperationStatus.ready,
+)
+
 
 class Operation(Base):
     __tablename__ = "operations"
     __table_args__ = (
+        CheckConstraint(
+            "reason IS NULL OR reason IN ('count', 'damaged', 'lost', 'other')",
+            name="ck_operations_reason",
+        ),
         Index("ix_operations_type", "type"),
         Index("ix_operations_status", "status"),
         Index("ix_operations_scheduled_date", "scheduled_date"),
@@ -60,6 +72,9 @@ class Operation(Base):
     validated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Only set on adjustments; the contract has no field for them on other types.
+    reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     source_location: Mapped[Location] = relationship(
         foreign_keys=[source_location_id], lazy="joined"
@@ -73,6 +88,14 @@ class Operation(Base):
         cascade="all, delete-orphan",
         order_by="OperationLine.id",
     )
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status in PENDING_STATUSES
+
+    @property
+    def is_late(self) -> bool:
+        return self.is_pending and self.scheduled_date < today()
 
 
 class OperationLine(Base):

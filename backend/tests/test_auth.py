@@ -14,7 +14,7 @@ def test_signup_returns_the_user_and_lowercases_email(client, credentials):
     assert response.status_code == 201
     body = response.json()
     assert set(body) == {"id", "login_id", "email", "created_at"}
-    assert body["login_id"] == "demo_user"
+    assert body["login_id"] == credentials["login_id"]
     assert body["email"] == "demo@example.com"
     # Signup does not log you in; the contract only sets the cookie on login.
     assert COOKIE_NAME not in response.cookies
@@ -34,7 +34,7 @@ def test_signup_duplicate_login_id_conflicts(client, credentials):
 def test_signup_duplicate_email_is_case_insensitive(client, credentials):
     signup(client, credentials)
 
-    response = signup(client, credentials, login_id="other_user", email="DEMO@EXAMPLE.COM")
+    response = signup(client, credentials, login_id="other_user", email="TEST@EXAMPLE.COM")
 
     assert response.status_code == 409
     assert response.json()["fields"] == {"email": "Already registered"}
@@ -97,7 +97,7 @@ def test_login_sets_the_auth_cookie(registered_client, credentials):
 @pytest.mark.parametrize(
     "login_id, password",
     [
-        ("demo_user", "Wrong@Pass1"),
+        ("test_user", "Wrong@Pass1"),
         ("no_such_user", "Valid@Pass1"),
     ],
     ids=["wrong password", "unknown login_id"],
