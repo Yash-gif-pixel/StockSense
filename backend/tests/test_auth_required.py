@@ -6,6 +6,12 @@ WAREHOUSE = {"name": "Warehouse", "short_code": "WH9", "address": None}
 LOCATION = {"warehouse_id": 1, "name": "Bay", "short_code": "BAY"}
 PRODUCT = {"name": "Thing", "sku": "THING1", "uom": "Unit", "unit_cost": 1}
 ADJUST = {"product_id": 1, "location_id": 1, "counted_qty": 1, "reason": "count"}
+OPERATION = {
+    "type": "receipt",
+    "dest_location_id": 1,
+    "scheduled_date": "2026-01-01",
+    "lines": [{"product_id": 1, "qty": 1}],
+}
 
 ENDPOINTS = [
     ("GET", "/api/warehouses", None),
@@ -22,6 +28,14 @@ ENDPOINTS = [
     ("GET", "/api/stock", None),
     ("GET", "/api/stock/1/locations", None),
     ("POST", "/api/stock/adjust", ADJUST),
+    ("GET", "/api/operations", None),
+    ("GET", "/api/operations/1", None),
+    ("POST", "/api/operations", OPERATION),
+    ("PUT", "/api/operations/1", OPERATION),
+    ("POST", "/api/operations/1/todo", None),
+    ("POST", "/api/operations/1/check-availability", None),
+    ("POST", "/api/operations/1/validate", None),
+    ("POST", "/api/operations/1/cancel", None),
 ]
 
 

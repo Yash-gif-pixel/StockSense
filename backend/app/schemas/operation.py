@@ -7,13 +7,34 @@ and anything already done or canceled they are null / false, per the contract.
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import Operation, OperationStatus, OperationType, StockMove
 from app.models.enums import MoveDirection
 from app.schemas.catalog import LocationOut, ProductOut
 from app.schemas.common import Quantity
+
+PositiveQuantity = Annotated[Quantity, Field(gt=0)]
+
+
+class OperationLineIn(BaseModel):
+    product_id: int
+    qty: PositiveQuantity
+
+
+class OperationIn(BaseModel):
+    """One body for all three types; which location fields are required depends on the
+    type and is enforced in inventory.resolve_locations so the error names the field."""
+
+    type: OperationType
+    scheduled_date: date
+    lines: list[OperationLineIn] = Field(min_length=1)
+    contact: str | None = Field(default=None, max_length=200)
+    delivery_address: str | None = Field(default=None, max_length=500)
+    source_location_id: int | None = None
+    dest_location_id: int | None = None
 
 
 class ResponsibleOut(BaseModel):

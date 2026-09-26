@@ -3,7 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import auth, categories, locations, products, stock, warehouses
+from app.api import (
+    auth,
+    categories,
+    locations,
+    operations,
+    products,
+    stock,
+    warehouses,
+)
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.errors import register_error_handlers
@@ -20,7 +28,7 @@ app.add_middleware(
 
 register_error_handlers(app)
 
-for module in (auth, warehouses, locations, categories, products, stock):
+for module in (auth, warehouses, locations, categories, products, stock, operations):
     app.include_router(module.router)
 
 

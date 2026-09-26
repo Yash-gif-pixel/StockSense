@@ -150,3 +150,60 @@ def seed_data(db):
 def api(logged_in_client, seed_data):
     """An authenticated client against a seeded database."""
     return logged_in_client
+
+
+def truncate_all() -> None:
+    """Wipe every table on the test database, for tests that must really commit."""
+    from sqlalchemy import text
+
+    from app.core.db import engine
+    from app.models import Base
+
+    tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture
+def committed_seed(migrated_database):
+    """Seeded, COMMITTED data plus a session factory, for genuine concurrency tests.
+
+    These cannot use the usual rolled-back session: a second connection would not see
+    uncommitted rows. Ids are handed back rather than ORM objects, because the setup
+    session is closed before the test runs.
+    """
+    from types import SimpleNamespace
+
+    from sqlalchemy import select
+
+    from app.core.db import SessionLocal
+    from app.models import Location, LocationType, Product, User, Warehouse
+    from scripts.seed import seed
+
+    truncate_all()
+    with SessionLocal() as setup:
+        seed(setup)
+        setup.commit()
+
+        def location_id(short_code):
+            return setup.scalar(select(Location.id).where(Location.short_code == short_code))
+
+        data = SimpleNamespace(
+            sessions=SessionLocal,
+            warehouse_id=setup.scalar(
+                select(Warehouse.id).where(Warehouse.short_code == "WH")
+            ),
+            stock1_id=location_id("Stock1"),
+            stock2_id=location_id("Stock2"),
+            customers_id=setup.scalar(
+                select(Location.id).where(Location.type == LocationType.customer)
+            ),
+            vendors_id=setup.scalar(
+                select(Location.id).where(Location.type == LocationType.vendor)
+            ),
+            desk_id=setup.scalar(select(Product.id).where(Product.sku == "DESK001")),
+            table_id=setup.scalar(select(Product.id).where(Product.sku == "TABLE001")),
+            user_id=setup.scalar(select(User.id).where(User.login_id == "demo_user")),
+        )
+    yield data
+    truncate_all()
