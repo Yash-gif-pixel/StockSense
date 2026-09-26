@@ -5,7 +5,7 @@
 * Dates: scheduled_date is "YYYY-MM-DD". Timestamps are ISO 8601 with timezone offset.
 * Quantities and money are JSON numbers.
 * Auth: POST /api/auth/login sets an httpOnly cookie. Every endpoint except signup/login/forgot/reset requires it; otherwise 401.
-* Errors (all non-2xx): {"code": "string", "message": "human readable", "fields": {"field_name": "message"}}  (fields only on validation errors)
+* Errors (all non-2xx): {"code": "string", "message": "human readable", "fields": {"field_name": "message"}}  (fields only on validation errors, and on conflict when a specific field caused it)
   Codes: validation_error (422), unauthorized (401), not_found (404), conflict (409), invalid_state (409), insufficient_stock (409)
 * Lists: {"items": [...], "total": n}. Query params limit (default 50, max 200), offset (default 0).
 
@@ -33,6 +33,8 @@ OperationDetail = OperationSummary + {delivery_address|null, responsible: {id, l
 Move {id, created_at, reference, operation_id, contact|null, product: {id, name, sku}, from_location: Location, to_location: Location, qty, direction}
 
 ## Auth
+   signup does NOT log the user in: 201 with no cookie; the client redirects to /login
+   email is stored and returned fully lower-cased
 POST /api/auth/signup {login_id, email, password} -> 201 User
    login_id: 6–12 chars, [A-Za-z0-9_.], unique (409 conflict)
    email: valid, unique case-insensitive (409 conflict)
@@ -40,7 +42,7 @@ POST /api/auth/signup {login_id, email, password} -> 201 User
 POST /api/auth/login {login_id, password} -> 200 User + cookie. Wrong creds -> 401 message "Invalid Login Id or Password"
 POST /api/auth/logout -> 204 (clears cookie)
 GET  /api/auth/me -> User
-POST /api/auth/change-password {current_password, new_password} -> 204
+POST /api/auth/change-password {current_password, new_password} -> 204. Wrong current_password -> 422 validation_error with fields.current_password
 POST /api/auth/forgot-password {email} -> 200 {"message": "..."} ALWAYS (even if email unknown)
 POST /api/auth/reset-password {email, otp, new_password} -> 204. Bad/expired/used OTP -> 400 code "invalid_otp"
 
