@@ -253,3 +253,31 @@ def test_warehouse_list_shape(api, seed_data):
 def test_seeded_warehouse_count_matches_total(api, db):
     body = api.get("/api/warehouses").json()
     assert body["total"] == db.scalar(select(func.count()).select_from(Warehouse))
+
+
+def test_renaming_a_warehouse_onto_a_taken_short_code_names_the_field(api, seed_data):
+    other = api.post(
+        "/api/warehouses", json={"name": "Other", "short_code": "OTH", "address": None}
+    ).json()
+
+    response = api.put(
+        f"/api/warehouses/{other['id']}",
+        json={"name": "Other", "short_code": "WH", "address": None},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "conflict"
+    assert response.json()["fields"] == {"short_code": "Already in use"}
+
+
+def test_renaming_a_location_onto_a_taken_short_code_names_the_field(api, seed_data):
+    response = api.put(
+        f"/api/locations/{seed_data.stock2.id}",
+        json={"name": "Stock1 again", "short_code": "Stock1"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "conflict"
+    assert response.json()["fields"] == {
+        "short_code": "Already in use in this warehouse"
+    }

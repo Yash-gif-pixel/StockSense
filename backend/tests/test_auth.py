@@ -160,10 +160,10 @@ def test_change_password_rejects_a_wrong_current_password(logged_in_client):
         json={"current_password": "Nope@Pass1", "new_password": "Brand@New9"},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     body = response.json()
     assert body["code"] == "validation_error"
-    assert "current_password" in body["fields"]
+    assert body["fields"] == {"current_password": "Current password is incorrect"}
 
 
 def test_change_password_applies_the_same_strength_rules(logged_in_client, credentials):

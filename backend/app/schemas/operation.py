@@ -5,7 +5,7 @@ from_operation() takes the availability the caller computed. For adjustments, re
 and anything already done or canceled they are null / false, per the contract.
 """
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models import Operation, OperationStatus, OperationType, StockMove
 from app.models.enums import MoveDirection
 from app.schemas.catalog import LocationOut, ProductOut
-from app.schemas.common import Quantity
+from app.schemas.common import Quantity, Timestamp
 
 PositiveQuantity = Annotated[Quantity, Field(gt=0)]
 
@@ -79,8 +79,8 @@ class OperationSummaryOut(BaseModel):
 class OperationDetailOut(OperationSummaryOut):
     delivery_address: str | None
     responsible: ResponsibleOut
-    created_at: datetime
-    validated_at: datetime | None
+    created_at: Timestamp
+    validated_at: Timestamp | None
     lines: list[OperationLineOut]
 
     @classmethod
@@ -104,7 +104,7 @@ class MoveOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: datetime
+    created_at: Timestamp
     reference: str
     operation_id: int
     contact: str | None

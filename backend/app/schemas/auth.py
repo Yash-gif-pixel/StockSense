@@ -6,10 +6,11 @@ turns a violation into 422 validation_error with the field name as the key.
 """
 
 import re
-from datetime import datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr
+
+from app.schemas.common import Timestamp
 
 LOGIN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.]{6,12}$")
 PASSWORD_MIN_LENGTH = 9
@@ -87,7 +88,7 @@ class UserOut(BaseModel):
     id: int
     login_id: str
     email: str
-    created_at: datetime
+    created_at: Timestamp
 
 
 class MessageOut(BaseModel):

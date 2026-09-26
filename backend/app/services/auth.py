@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import (
-    BadRequestError,
     ConflictError,
     InvalidOtpError,
     UnauthorizedError,
+    ValidationError,
 )
 from app.core.security import hash_otp, hash_password, verify_password
 from app.models import PasswordReset, User
@@ -64,7 +64,7 @@ def authenticate(db: Session, login_id: str, password: str) -> User:
 
 def change_password(db: Session, user: User, current_password: str, new_password: str) -> None:
     if not verify_password(current_password, user.password_hash):
-        raise BadRequestError(
+        raise ValidationError(
             "Current password is incorrect",
             fields={"current_password": "Current password is incorrect"},
         )

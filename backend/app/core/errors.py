@@ -63,15 +63,6 @@ class InsufficientStockError(DomainError):
     message = "Not enough stock available"
 
 
-class BadRequestError(DomainError):
-    """422 is for request-shape problems; this is for a well-formed request the
-    server rejects, e.g. a wrong current_password."""
-
-    code = "validation_error"
-    status_code = 400
-    message = "Request could not be completed"
-
-
 class InvalidOtpError(DomainError):
     code = "invalid_otp"
     status_code = 400
