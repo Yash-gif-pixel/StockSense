@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from app.api import (
     auth,
     categories,
+    dashboard,
     locations,
+    moves,
     operations,
     products,
     stock,
@@ -28,7 +30,17 @@ app.add_middleware(
 
 register_error_handlers(app)
 
-for module in (auth, warehouses, locations, categories, products, stock, operations):
+for module in (
+    auth,
+    warehouses,
+    locations,
+    categories,
+    products,
+    stock,
+    operations,
+    moves,
+    dashboard,
+):
     app.include_router(module.router)
 
 

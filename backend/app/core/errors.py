@@ -23,6 +23,15 @@ class DomainError(Exception):
         fields: dict[str, str] | None = None,
     ) -> None:
         self.message = message or self.message
+        if fields:
+            blank = [name for name, text in fields.items() if not str(text).strip()]
+            if blank:
+                # A field with no message tells the frontend nothing; catch it here
+                # rather than shipping {"field": ""} to the client.
+                raise ValueError(
+                    f"{type(self).__name__} was given blank messages for: "
+                    f"{', '.join(blank)}"
+                )
         self.fields = fields
         super().__init__(self.message)
 
@@ -113,12 +122,17 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
     return error_response(exc.status_code, code, detail)
 
 
+def _field_message(raw: str) -> str:
+    """Pydantic prefixes a validator's ValueError with "Value error, ". Stripping that
+    can leave nothing at all (a ValueError("") renders as exactly "Value error, "), and
+    an empty message is useless to the client, so fall back rather than emit "".
+    """
+    return raw.removeprefix("Value error, ").strip() or raw.strip() or "Invalid value"
+
+
 async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
-    fields = {
-        _field_path(err["loc"]): err["msg"].removeprefix("Value error, ")
-        for err in exc.errors()
-    }
+    fields = {_field_path(err["loc"]): _field_message(err["msg"]) for err in exc.errors()}
     return error_response(422, "validation_error", "Validation failed", fields)
 
 

@@ -15,7 +15,7 @@ from app.schemas.stock import StockLocationRowOut, StockRowOut
 ZERO = Decimal("0")
 
 
-def _internal_totals(warehouse_id: int | None):
+def internal_totals(warehouse_id: int | None):
     """Per-product on-hand and reserved, counting internal locations only."""
     query = (
         select(
@@ -36,18 +36,17 @@ def _count(db: Session, query: Select) -> int:
     return db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
 
-def stock_rows(
-    db: Session,
-    pagination: Pagination,
-    search: str | None = None,
-    warehouse_id: int | None = None,
-    category_id: int | None = None,
-    status: StockStatus | None = None,
-) -> tuple[list[StockRowOut], int]:
-    totals = _internal_totals(warehouse_id)
+def stock_expressions(warehouse_id: int | None):
+    """The single definition of on_hand, reserved and status.
+
+    GET /api/stock and GET /api/dashboard both build on this, so their numbers cannot
+    disagree. status: out if on_hand <= 0; low if min_qty is set and on_hand <= min_qty;
+    otherwise ok.
+    """
+    totals = internal_totals(warehouse_id)
     on_hand = func.coalesce(totals.c.on_hand, literal(ZERO))
     reserved = func.coalesce(totals.c.reserved, literal(ZERO))
-    status_expr = case(
+    status = case(
         (on_hand <= ZERO, StockStatus.out.value),
         (
             and_(Product.min_qty.is_not(None), on_hand <= Product.min_qty),
@@ -55,9 +54,13 @@ def stock_rows(
         ),
         else_=StockStatus.ok.value,
     )
+    return totals, on_hand, reserved, status
 
+
+def active_products(totals, category_id: int | None = None, search: str | None = None):
+    """Active products left-joined to their internal totals, with the shared filters."""
     query = (
-        select(Product, on_hand.label("on_hand"), reserved.label("reserved"), status_expr)
+        select(Product)
         .outerjoin(totals, totals.c.product_id == Product.id)
         .where(Product.active.is_(True))
     )
@@ -66,6 +69,22 @@ def stock_rows(
         query = query.where(or_(Product.name.ilike(pattern), Product.sku.ilike(pattern)))
     if category_id is not None:
         query = query.where(Product.category_id == category_id)
+    return query
+
+
+def stock_rows(
+    db: Session,
+    pagination: Pagination,
+    search: str | None = None,
+    warehouse_id: int | None = None,
+    category_id: int | None = None,
+    status: StockStatus | None = None,
+) -> tuple[list[StockRowOut], int]:
+    totals, on_hand, reserved, status_expr = stock_expressions(warehouse_id)
+
+    query = active_products(totals, category_id=category_id, search=search).add_columns(
+        on_hand.label("on_hand"), reserved.label("reserved"), status_expr
+    )
     if status is not None:
         # Repeating the expression, because Postgres cannot filter on a select alias.
         query = query.where(status_expr == status.value)

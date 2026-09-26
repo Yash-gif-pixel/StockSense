@@ -36,6 +36,8 @@ ENDPOINTS = [
     ("POST", "/api/operations/1/check-availability", None),
     ("POST", "/api/operations/1/validate", None),
     ("POST", "/api/operations/1/cancel", None),
+    ("GET", "/api/moves", None),
+    ("GET", "/api/dashboard", None),
 ]
 
 

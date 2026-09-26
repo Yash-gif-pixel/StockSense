@@ -70,19 +70,13 @@ def line_availability(db: Session, operation: Operation) -> dict[int, Decimal] |
     return {line.id: quants.get(line.product_id, ZERO) for line in operation.lines}
 
 
-def _conditions(
-    op_type: OperationType | None,
-    statuses: list[OperationStatus] | None,
-    warehouse_id: int | None,
-    category_id: int | None,
-    search: str | None,
-    late: bool | None,
-):
+def scope_conditions(warehouse_id: int | None = None, category_id: int | None = None):
+    """Warehouse and category scoping, shared by the list and the dashboard.
+
+    An operation belongs to a warehouse if either end of it does, and to a category if
+    any of its lines does.
+    """
     conditions = []
-    if op_type is not None:
-        conditions.append(Operation.type == op_type)
-    if statuses:
-        conditions.append(Operation.status.in_(statuses))
     if warehouse_id is not None:
         # Either end of the document may belong to the warehouse.
         source_warehouse = (
@@ -109,6 +103,22 @@ def _conditions(
             )
             .exists()
         )
+    return conditions
+
+
+def _conditions(
+    op_type: OperationType | None,
+    statuses: list[OperationStatus] | None,
+    warehouse_id: int | None,
+    category_id: int | None,
+    search: str | None,
+    late: bool | None,
+):
+    conditions = scope_conditions(warehouse_id=warehouse_id, category_id=category_id)
+    if op_type is not None:
+        conditions.append(Operation.type == op_type)
+    if statuses:
+        conditions.append(Operation.status.in_(statuses))
     if search:
         pattern = f"%{search}%"
         conditions.append(

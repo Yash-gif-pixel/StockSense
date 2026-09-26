@@ -61,15 +61,49 @@ def db(migrated_database: None) -> Generator[Session, None, None]:
         connection.close()
 
 
+def assert_error_contract(response) -> None:
+    """Every error body the suite ever sees must satisfy the contract's error shape.
+
+    In particular no field message may be blank: {"field": ""} tells the frontend
+    nothing, so it is treated as a failure wherever it appears.
+    """
+    if response.status_code < 400:
+        return
+    if not response.headers.get("content-type", "").startswith("application/json"):
+        return
+    try:
+        body = response.json()
+    except ValueError:  # pragma: no cover - a non-JSON error body
+        return
+    if not isinstance(body, dict) or "code" not in body:
+        return
+
+    assert str(body.get("message", "")).strip(), f"blank error message: {body}"
+    for name, message in (body.get("fields") or {}).items():
+        assert str(message).strip(), (
+            f"blank message for field {name!r} in {response.request.method} "
+            f"{response.request.url.path}: {body}"
+        )
+
+
 @pytest.fixture
 def client(db: Session) -> Generator["TestClient", None, None]:  # noqa: F821
     from fastapi.testclient import TestClient
 
     from app.main import app
 
+    class ContractCheckingClient(TestClient):
+        """Asserts the error contract on every single response, so no test can pass
+        while quietly returning a blank field message."""
+
+        def request(self, *args, **kwargs):
+            response = super().request(*args, **kwargs)
+            assert_error_contract(response)
+            return response
+
     app.dependency_overrides[get_db] = lambda: db
     try:
-        with TestClient(app) as test_client:
+        with ContractCheckingClient(app) as test_client:
             yield test_client
     finally:
         app.dependency_overrides.clear()

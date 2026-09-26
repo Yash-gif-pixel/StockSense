@@ -90,3 +90,43 @@ def test_a_draft_has_a_null_validated_at_not_a_string(api, seed_data):
     ).json()
 
     assert draft["validated_at"] is None
+
+
+def test_every_connection_reports_utc_even_when_the_server_default_is_not(db):
+    """Fix B: the engine's connect_args pin the session TimeZone.
+
+    A throwaway engine built from the SAME CONNECT_ARGS the app uses guarantees a
+    genuinely new connection; asking the shared pool could hand back one opened before
+    the server default was changed, which would prove nothing.
+    """
+    from sqlalchemy import create_engine, text
+
+    from app.core.config import settings
+    from app.core.db import CONNECT_ARGS
+
+    assert CONNECT_ARGS == {"options": "-c timezone=UTC"}
+
+    database = db.scalar(text("SELECT current_database()"))
+    admin = create_engine(settings.DATABASE_URL, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conn:
+            conn.execute(
+                text(f"ALTER DATABASE \"{database}\" SET timezone TO 'Asia/Kolkata'")
+            )
+
+        # Without connect_args a fresh connection picks up the server default...
+        bare = create_engine(settings.DATABASE_URL)
+        with bare.connect() as conn:
+            assert conn.scalar(text("SHOW timezone")) == "Asia/Kolkata"
+        bare.dispose()
+
+        # ...and with them it does not.
+        pinned = create_engine(settings.DATABASE_URL, connect_args=CONNECT_ARGS)
+        with pinned.connect() as conn:
+            assert conn.scalar(text("SHOW timezone")) == "UTC"
+            assert conn.scalar(text("SELECT now()")).utcoffset().total_seconds() == 0
+        pinned.dispose()
+    finally:
+        with admin.connect() as conn:
+            conn.execute(text(f'ALTER DATABASE "{database}" RESET timezone'))
+        admin.dispose()

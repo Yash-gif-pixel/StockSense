@@ -5,7 +5,19 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, future=True)
+#: Pin every session to UTC regardless of the server's or the client host's timezone.
+#: psycopg returns TIMESTAMPTZ values in the session TimeZone, so without this the same
+#: instant is handed back with different offsets on different deployments. The schemas
+#: normalise on the way out as well (app.schemas.common.Timestamp); this keeps raw SQL,
+#: psql sessions and anything bypassing the schemas consistent too.
+CONNECT_ARGS = {"options": "-c timezone=UTC"}
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    future=True,
+    connect_args=CONNECT_ARGS,
+)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
