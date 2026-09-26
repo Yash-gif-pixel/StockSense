@@ -228,3 +228,56 @@ def test_adjustments_appear_in_history(api, seed_data):
     assert move["direction"] == "in"
     assert move["from_location"]["full_name"] == "Inventory Adjustment"
     assert move["contact"] is None
+
+
+# --- against the demo dataset, which spans two weeks ----------------------
+
+
+def _demo_history(api, db):
+    from scripts import demo_data
+
+    demo_data.build(db)
+    db.flush()
+    return api.get("/api/moves", params={"limit": 200}).json()
+
+
+def test_a_date_window_returns_a_strict_subset(api, db):
+    everything = _demo_history(api, db)
+
+    window = api.get(
+        "/api/moves",
+        params={
+            "date_from": (today() - timedelta(days=10)).isoformat(),
+            "date_to": (today() - timedelta(days=8)).isoformat(),
+            "limit": 200,
+        },
+    ).json()
+
+    all_ids = {item["id"] for item in everything["items"]}
+    window_ids = {item["id"] for item in window["items"]}
+
+    assert 0 < window["total"] < everything["total"]
+    assert window_ids < all_ids, "the window is not a strict subset"
+    assert window["total"] == len(window_ids)
+
+
+def test_ordering_by_created_at_desc_matches_id_desc(api, db):
+    everything = _demo_history(api, db)
+    items = everything["items"]
+
+    ids = [item["id"] for item in items]
+    stamps = [item["created_at"] for item in items]
+
+    assert len(items) == everything["total"]
+    assert ids == sorted(ids, reverse=True)
+    # Timestamps are fixed-width UTC Z strings, so lexical order is chronological order.
+    assert stamps == sorted(stamps, reverse=True)
+    assert len(set(stamps)) == len(stamps), "the demo history has duplicate instants"
+
+
+def test_the_demo_history_spans_distinct_days(api, db):
+    everything = _demo_history(api, db)
+
+    days = {item["created_at"][:10] for item in everything["items"]}
+
+    assert len(days) >= 7, sorted(days)

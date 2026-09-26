@@ -1,22 +1,28 @@
 """Realistic demo data for judging.
 
-Everything goes through app/services, never a raw INSERT into stock_moves or
-stock_quants, so the ledger stays internally consistent and scripts/check_ledger.py
-passes afterwards.
+Everything goes through app/services, never a raw INSERT or UPDATE against stock_moves
+or stock_quants, so the ledger stays consistent and scripts/check_ledger.py passes.
 
     uv run python -m scripts.demo_data
 
 Refuses to run twice: if any operation exists it prints a message and exits 0.
+
+Documents are spread over the last 14 days and created in strict chronological order, so
+row ids ascend with time and the move history looks like a fortnight of real trading. The
+back-dating uses the services' occurred_at parameter, which no router and no request
+schema exposes.
 """
 
 import sys
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.clock import today
+from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models import (
     AdjustReason,
@@ -44,17 +50,230 @@ PRODUCTS = [
 # The seeded products have no minimum; give them one so statuses are meaningful.
 SEEDED_MINIMUMS = {"DESK001": "15", "TABLE001": "20"}
 
-# sku, location short_code, counted quantity. Deliberately leaves Aluminium Sheet and
-# Screws Box at zero (out of stock) and Table and Wooden Plank below their minimum (low).
+
+@dataclass(frozen=True)
+class Moment:
+    """A business-hours instant, expressed as days before today in APP_TIMEZONE."""
+
+    days_ago: int
+    hour: int
+    minute: int = 0
+
+    def resolve(self, current: date) -> datetime:
+        day = current - timedelta(days=self.days_ago)
+        return datetime.combine(day, time(self.hour, self.minute), tzinfo=settings.timezone)
+
+
+@dataclass(frozen=True)
+class Opening:
+    """An opening-stock count."""
+
+    at: Moment
+    sku: str
+    location: str
+    counted: str
+
+
+@dataclass(frozen=True)
+class Document:
+    at: Moment
+    op_type: OperationType
+    scheduled_in_days: int  # relative to today; negative is in the past
+    lines: list[tuple[str, str]]
+    outcome: str  # draft | ready | waiting | done | canceled | canceled_from_ready
+    validated_at: Moment | None = None
+    contact: str | None = None
+    delivery_address: str | None = None
+    source: str | None = None
+    dest: str | None = None
+
+
+@dataclass(frozen=True)
+class Correction:
+    """A later adjustment with a reason other than a plain count."""
+
+    at: Moment
+    sku: str
+    location: str
+    counted: str
+    reason: str
+    note: str
+
+
+# Deliberately leaves Aluminium Sheet and Screws Box at zero (out of stock), and Table
+# and Wooden Plank below their minimum (low).
 OPENING_STOCK = [
-    ("DESK001", "Stock1", "40"),
-    ("DESK001", "Stock2", "10"),
-    ("TABLE001", "Stock1", "12"),
-    ("CHAIR001", "Stock1", "60"),
-    ("SHELF001", "Stock1", "8"),
-    ("STEEL001", "Stock1", "500"),
-    ("STEEL001", "Stock2", "250"),
-    ("PLANK001", "Stock2", "30"),
+    Opening(Moment(14, 9, 30), "DESK001", "Stock1", "40"),
+    Opening(Moment(14, 9, 45), "DESK001", "Stock2", "10"),
+    Opening(Moment(14, 10, 0), "TABLE001", "Stock1", "12"),
+    Opening(Moment(14, 10, 20), "CHAIR001", "Stock1", "60"),
+    Opening(Moment(13, 9, 35), "SHELF001", "Stock1", "8"),
+    Opening(Moment(13, 9, 50), "STEEL001", "Stock1", "500"),
+    Opening(Moment(13, 10, 5), "STEEL001", "Stock2", "250"),
+    Opening(Moment(13, 10, 25), "PLANK001", "Stock2", "30"),
+]
+
+# In chronological order of creation. A receipt goes straight to ready when marked to do,
+# so it never sits in waiting; that status is only reachable by an outgoing document short
+# of stock (the Aluminium Sheet delivery below).
+TIMELINE = [
+    Document(
+        at=Moment(12, 10, 15),
+        op_type=OperationType.receipt,
+        scheduled_in_days=-12,
+        lines=[("STEEL001", "200")],
+        outcome="done",
+        validated_at=Moment(12, 14, 30),
+        contact="Tata Steel Ltd",
+        dest="Stock1",
+    ),
+    Document(
+        at=Moment(11, 11, 0),
+        op_type=OperationType.delivery,
+        scheduled_in_days=-10,
+        lines=[("DESK001", "5")],
+        outcome="done",
+        validated_at=Moment(10, 15, 20),
+        contact="Ashok Motors",
+        delivery_address="MIDC Bhosari, Pune 411026",
+        source="Stock1",
+    ),
+    Document(
+        at=Moment(9, 9, 45),
+        op_type=OperationType.internal,
+        scheduled_in_days=-9,
+        lines=[("STEEL001", "100")],
+        outcome="done",
+        validated_at=Moment(9, 16, 0),
+        source="Stock1",
+        dest="Stock2",
+    ),
+    Document(
+        at=Moment(8, 11, 20),
+        op_type=OperationType.delivery,
+        scheduled_in_days=-8,
+        lines=[("TABLE001", "2")],
+        outcome="done",
+        validated_at=Moment(8, 16, 40),
+        contact="Pune Municipal Corporation",
+        delivery_address="Shivajinagar, Pune 411005",
+        source="Stock1",
+    ),
+    # --- the two non-count corrections land here (see CORRECTIONS) ---
+    Document(
+        at=Moment(5, 10, 20),
+        op_type=OperationType.receipt,
+        scheduled_in_days=-5,
+        lines=[("SCREW001", "40")],
+        outcome="draft",  # late receipt: overdue and never processed
+        contact="Pune Fasteners",
+        dest="Stock1",
+    ),
+    Document(
+        at=Moment(4, 14, 0),
+        op_type=OperationType.delivery,
+        scheduled_in_days=-2,
+        lines=[("TABLE001", "5")],
+        outcome="draft",  # late delivery
+        contact="Symbiosis University",
+        delivery_address="Lavale, Pune 412115",
+        source="Stock1",
+    ),
+    Document(
+        at=Moment(3, 11, 30),
+        op_type=OperationType.delivery,
+        scheduled_in_days=0,
+        lines=[("STEEL001", "100")],
+        outcome="ready",
+        contact="Kirloskar Brothers",
+        delivery_address="Kothrud, Pune 411038",
+        source="Stock1",
+    ),
+    Document(
+        at=Moment(3, 16, 45),
+        op_type=OperationType.receipt,
+        scheduled_in_days=3,
+        lines=[("CHAIR001", "25")],
+        outcome="ready",  # upcoming
+        contact="Godrej Interio",
+        dest="Stock1",
+    ),
+    Document(
+        at=Moment(2, 9, 50),
+        op_type=OperationType.delivery,
+        scheduled_in_days=2,
+        lines=[("ALUM001", "30")],
+        outcome="waiting",  # genuinely short: nothing in stock
+        contact="Bajaj Auto",
+        delivery_address="Akurdi, Pune 411035",
+        source="Stock1",
+    ),
+    Document(
+        at=Moment(2, 13, 15),
+        op_type=OperationType.receipt,
+        scheduled_in_days=1,
+        lines=[("SHELF001", "10")],
+        outcome="canceled",
+        contact="Nilkamal",
+        dest="Stock1",
+    ),
+    Document(
+        at=Moment(1, 10, 40),
+        op_type=OperationType.delivery,
+        scheduled_in_days=5,
+        lines=[("CHAIR001", "10")],
+        outcome="canceled_from_ready",
+        contact="Infosys Pune",
+        delivery_address="Hinjewadi Phase 2, Pune 411057",
+        source="Stock1",
+    ),
+    Document(
+        at=Moment(1, 15, 30),
+        op_type=OperationType.receipt,
+        scheduled_in_days=0,
+        lines=[("ALUM001", "50")],
+        outcome="draft",
+        contact="Hindalco",
+        dest="Stock1",
+    ),
+    Document(
+        at=Moment(1, 16, 10),
+        op_type=OperationType.delivery,
+        scheduled_in_days=6,
+        lines=[("SHELF001", "2")],
+        outcome="draft",  # upcoming
+        contact="Fergusson College",
+        delivery_address="FC Road, Pune 411004",
+        source="Stock1",
+    ),
+    Document(
+        at=Moment(1, 17, 0),
+        op_type=OperationType.internal,
+        scheduled_in_days=1,
+        lines=[("DESK001", "10")],
+        outcome="ready",
+        source="Stock1",
+        dest="Stock2",
+    ),
+]
+
+CORRECTIONS = [
+    Correction(
+        Moment(7, 12, 30),
+        "PLANK001",
+        "Stock2",
+        "27",
+        AdjustReason.damaged.value,
+        "Three planks warped in storage",
+    ),
+    Correction(
+        Moment(6, 15, 10),
+        "SHELF001",
+        "Stock1",
+        "7",
+        AdjustReason.lost.value,
+        "One unit unaccounted for",
+    ),
 ]
 
 
@@ -63,10 +282,11 @@ def _already_populated(db: Session) -> bool:
 
 
 def build(db: Session) -> list[str]:
-    """Create the demo dataset. Returns the references created, in order."""
+    """Create the demo dataset. Returns the references created, in chronological order."""
     seed(db)
     db.flush()
 
+    current = today()
     user = db.scalar(select(User).where(User.login_id == DEMO_USER["login_id"]))
     warehouse = db.scalar(select(Warehouse).where(Warehouse.short_code == "WH"))
     categories = {
@@ -84,7 +304,6 @@ def build(db: Session) -> list[str]:
     def product(sku: str) -> Product:
         return db.scalar(select(Product).where(Product.sku == sku))
 
-    stock1, stock2 = location("Stock1"), location("Stock2")
     references: list[str] = []
 
     # --- catalogue ---------------------------------------------------------
@@ -113,184 +332,7 @@ def build(db: Session) -> list[str]:
         )
     db.flush()
 
-    # --- opening stock, as counted adjustments ----------------------------
-    for sku, short_code, quantity in OPENING_STOCK:
-        changed, operation = inventory.adjust(
-            db,
-            user,
-            product_id=product(sku).id,
-            location_id=location(short_code).id,
-            counted_qty=Decimal(quantity),
-            reason=AdjustReason.count.value,
-            note="Opening count",
-        )
-        if changed:
-            references.append(operation.reference)
-
-    # --- documents ---------------------------------------------------------
-    current = today()
-
-    def make(op_type: OperationType, scheduled: date, lines, **kwargs) -> Operation:
-        operation = inventory.create_operation(
-            db,
-            user,
-            op_type=op_type,
-            scheduled_date=scheduled,
-            lines=[
-                inventory.LineInput(product_id=product(sku).id, qty=Decimal(qty))
-                for sku, qty in lines
-            ],
-            **kwargs,
-        )
-        references.append(operation.reference)
-        return operation
-
-    def advance(operation: Operation, to: str) -> None:
-        if to in ("ready", "done", "canceled_from_ready"):
-            inventory.mark_todo(db, operation.id)
-        if to == "waiting":
-            inventory.mark_todo(db, operation.id)
-        if to == "done":
-            inventory.validate_operation(db, user, operation.id)
-        if to in ("canceled", "canceled_from_ready"):
-            inventory.cancel_operation(db, operation.id)
-
-    # Receipts. A receipt goes straight to ready when marked to do, so it never sits in
-    # waiting; that status is only reachable by an outgoing document short of stock.
-    advance(
-        make(
-            OperationType.receipt,
-            current - timedelta(days=6),
-            [("STEEL001", "200")],
-            contact="Tata Steel Ltd",
-            dest_location_id=stock1.id,
-        ),
-        "done",
-    )
-    advance(
-        make(
-            OperationType.receipt,
-            current + timedelta(days=3),
-            [("CHAIR001", "25")],
-            contact="Godrej Interio",
-            dest_location_id=stock1.id,
-        ),
-        "ready",
-    )
-    make(
-        OperationType.receipt,
-        current,
-        [("ALUM001", "50")],
-        contact="Hindalco",
-        dest_location_id=stock1.id,
-    )  # draft
-    make(
-        OperationType.receipt,
-        current - timedelta(days=5),
-        [("SCREW001", "40")],
-        contact="Pune Fasteners",
-        dest_location_id=stock1.id,
-    )  # late draft
-    advance(
-        make(
-            OperationType.receipt,
-            current + timedelta(days=1),
-            [("SHELF001", "10")],
-            contact="Nilkamal",
-            dest_location_id=stock1.id,
-        ),
-        "canceled",
-    )
-
-    # Deliveries.
-    advance(
-        make(
-            OperationType.delivery,
-            current - timedelta(days=4),
-            [("DESK001", "5")],
-            contact="Ashok Motors",
-            delivery_address="MIDC Bhosari, Pune 411026",
-            source_location_id=stock1.id,
-        ),
-        "done",
-    )
-    advance(
-        make(
-            OperationType.delivery,
-            current,
-            [("STEEL001", "100")],
-            contact="Kirloskar Brothers",
-            delivery_address="Kothrud, Pune 411038",
-            source_location_id=stock1.id,
-        ),
-        "ready",
-    )
-    advance(
-        make(
-            OperationType.delivery,
-            current + timedelta(days=2),
-            [("ALUM001", "30")],
-            contact="Bajaj Auto",
-            delivery_address="Akurdi, Pune 411035",
-            source_location_id=stock1.id,
-        ),
-        "waiting",
-    )  # genuinely short: nothing in stock
-    make(
-        OperationType.delivery,
-        current - timedelta(days=2),
-        [("TABLE001", "5")],
-        contact="Symbiosis University",
-        delivery_address="Lavale, Pune 412115",
-        source_location_id=stock1.id,
-    )  # late draft
-    advance(
-        make(
-            OperationType.delivery,
-            current + timedelta(days=5),
-            [("CHAIR001", "10")],
-            contact="Infosys Pune",
-            delivery_address="Hinjewadi Phase 2, Pune 411057",
-            source_location_id=stock1.id,
-        ),
-        "canceled_from_ready",
-    )
-    make(
-        OperationType.delivery,
-        current + timedelta(days=6),
-        [("SHELF001", "2")],
-        contact="Fergusson College",
-        delivery_address="FC Road, Pune 411004",
-        source_location_id=stock1.id,
-    )  # upcoming draft
-
-    # Internal transfers.
-    advance(
-        make(
-            OperationType.internal,
-            current - timedelta(days=3),
-            [("STEEL001", "100")],
-            source_location_id=stock1.id,
-            dest_location_id=stock2.id,
-        ),
-        "done",
-    )
-    advance(
-        make(
-            OperationType.internal,
-            current + timedelta(days=1),
-            [("DESK001", "10")],
-            source_location_id=stock1.id,
-            dest_location_id=stock2.id,
-        ),
-        "ready",
-    )
-
-    # Adjustments with the other reasons.
-    for sku, short_code, counted, reason, note in [
-        ("PLANK001", "Stock2", "27", AdjustReason.damaged.value, "Three planks warped in storage"),
-        ("SHELF001", "Stock1", "7", AdjustReason.lost.value, "One unit unaccounted for"),
-    ]:
+    def record_adjustment(at: Moment, sku: str, short_code: str, counted: str, reason: str, note: str):
         changed, operation = inventory.adjust(
             db,
             user,
@@ -299,9 +341,64 @@ def build(db: Session) -> list[str]:
             counted_qty=Decimal(counted),
             reason=reason,
             note=note,
+            occurred_at=at.resolve(current),
         )
         if changed:
             references.append(operation.reference)
+
+    # --- everything below runs in strict chronological order ---------------
+    # Opening stock first, as counted adjustments.
+    for opening in OPENING_STOCK:
+        record_adjustment(
+            opening.at,
+            opening.sku,
+            opening.location,
+            opening.counted,
+            AdjustReason.count.value,
+            "Opening count",
+        )
+
+    # Documents and corrections, merged by the moment they happened.
+    corrections = list(CORRECTIONS)
+    events: list[tuple[int, int, int, object]] = [
+        (-doc.at.days_ago, doc.at.hour, doc.at.minute, doc) for doc in TIMELINE
+    ] + [(-c.at.days_ago, c.at.hour, c.at.minute, c) for c in corrections]
+    events.sort(key=lambda item: item[:3])
+
+    for *_ordering, event in events:
+        if isinstance(event, Correction):
+            record_adjustment(
+                event.at, event.sku, event.location, event.counted, event.reason, event.note
+            )
+            continue
+
+        doc: Document = event
+        operation = inventory.create_operation(
+            db,
+            user,
+            op_type=doc.op_type,
+            scheduled_date=current + timedelta(days=doc.scheduled_in_days),
+            lines=[
+                inventory.LineInput(product_id=product(sku).id, qty=Decimal(qty))
+                for sku, qty in doc.lines
+            ],
+            contact=doc.contact,
+            delivery_address=doc.delivery_address,
+            source_location_id=location(doc.source).id if doc.source else None,
+            dest_location_id=location(doc.dest).id if doc.dest else None,
+            occurred_at=doc.at.resolve(current),
+        )
+        references.append(operation.reference)
+
+        if doc.outcome in ("ready", "waiting", "done", "canceled_from_ready"):
+            inventory.mark_todo(db, operation.id)
+        if doc.outcome == "done":
+            assert doc.validated_at is not None, f"{operation.reference} needs a validation time"
+            inventory.validate_operation(
+                db, user, operation.id, occurred_at=doc.validated_at.resolve(current)
+            )
+        if doc.outcome in ("canceled", "canceled_from_ready"):
+            inventory.cancel_operation(db, operation.id)
 
     db.flush()
     return references
@@ -322,9 +419,9 @@ def main() -> int:
             "operations": db.scalar(select(func.count()).select_from(Operation)),
         }
 
-    print(f"created {len(references)} documents across {counts['operations']} operations")
+    print(f"created {counts['operations']} operations over the last 14 days")
     print(f"products: {counts['products']}")
-    print("references:")
+    print("references, oldest first:")
     for reference in references:
         print(f"  {reference}")
     print("dashboard:")

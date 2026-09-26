@@ -15,6 +15,21 @@ def today() -> date:
     return datetime.now(settings.timezone).date()
 
 
+def ensure_aware(value: datetime) -> datetime:
+    """Guard for any caller-supplied instant. A naive datetime has no meaning without a
+    zone, so it is refused rather than assumed to be UTC or local."""
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        raise ValueError(
+            f"Refusing the naive datetime {value!r}: an instant must be timezone-aware"
+        )
+    return value
+
+
+def local_date(value: datetime) -> date:
+    """The calendar date `value` falls on in APP_TIMEZONE."""
+    return value.astimezone(settings.timezone).date()
+
+
 def day_start(day: date) -> datetime:
     """Midnight at the start of `day` in APP_TIMEZONE, as an aware datetime.
 

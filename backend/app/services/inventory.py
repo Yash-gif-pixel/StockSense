@@ -9,14 +9,14 @@ operations touching overlapping products cannot deadlock.
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.core.clock import now, today
+from app.core.clock import ensure_aware, local_date, now
 from app.core.errors import (
     ConflictError,
     InsufficientStockError,
@@ -60,6 +60,15 @@ CANCELABLE_STATUSES = (
 class LineInput:
     product_id: int
     qty: Decimal
+
+
+def _stamp(occurred_at: datetime | None) -> datetime:
+    """The instant to record. None means now; a supplied instant must be aware.
+
+    Only demo/back-dating callers pass this. No router does, and no request schema
+    accepts it, so it can never be set from the API.
+    """
+    return now() if occurred_at is None else ensure_aware(occurred_at)
 
 
 def virtual_location(db: Session, location_type: LocationType) -> Location:
@@ -128,6 +137,8 @@ def adjust(
     counted_qty: Decimal,
     reason: str,
     note: str | None = None,
+    *,
+    occurred_at: datetime | None = None,
 ) -> tuple[bool, Operation | None]:
     """Set a product's quantity at one internal location to the counted figure.
 
@@ -162,15 +173,19 @@ def adjust(
     else:
         source, dest = location, adjustment_location
 
+    stamp = _stamp(occurred_at)
     operation = Operation(
         reference=next_reference(db, location.warehouse_id, OperationType.adjustment),
         type=OperationType.adjustment,
         status=OperationStatus.done,
         source_location_id=source.id,
         dest_location_id=dest.id,
-        scheduled_date=today(),
+        # An adjustment is counted and posted in one go, so its scheduled date is the
+        # local day it happened on.
+        scheduled_date=local_date(stamp),
         responsible_user_id=user.id,
-        validated_at=now(),
+        created_at=stamp,
+        validated_at=stamp,
         reason=reason,
         note=note,
     )
@@ -187,6 +202,7 @@ def adjust(
             to_location_id=dest.id,
             qty=quantity,
             user_id=user.id,
+            created_at=stamp,
         )
     )
     quant.quantity = counted_qty
@@ -275,6 +291,7 @@ def create_operation(
     delivery_address: str | None = None,
     source_location_id: int | None = None,
     dest_location_id: int | None = None,
+    occurred_at: datetime | None = None,
 ) -> Operation:
     if op_type is OperationType.adjustment:
         raise ValidationError(
@@ -298,6 +315,7 @@ def create_operation(
         dest_location_id=dest.id,
         scheduled_date=scheduled_date,
         responsible_user_id=user.id,
+        created_at=_stamp(occurred_at),
     )
     operation.lines = [
         OperationLine(product_id=line.product_id, qty=line.qty) for line in lines
@@ -433,7 +451,13 @@ def check_availability(db: Session, operation_id: int) -> Operation:
     return operation
 
 
-def validate_operation(db: Session, user: User, operation_id: int) -> Operation:
+def validate_operation(
+    db: Session,
+    user: User,
+    operation_id: int,
+    *,
+    occurred_at: datetime | None = None,
+) -> Operation:
     """ready -> done. Writes the moves and updates the cached balances."""
     operation = lock_operation(db, operation_id)
     reject_adjustment(operation)
@@ -449,6 +473,7 @@ def validate_operation(db: Session, user: User, operation_id: int) -> Operation:
         if dest.is_internal:
             pairs.append((line.product_id, dest.id))
     quants = lock_quants(db, pairs)
+    stamp = _stamp(occurred_at)
 
     for line in operation.lines:
         if source.is_internal:
@@ -471,11 +496,12 @@ def validate_operation(db: Session, user: User, operation_id: int) -> Operation:
                 to_location_id=dest.id,
                 qty=line.qty,
                 user_id=user.id,
+                created_at=stamp,
             )
         )
 
     operation.status = OperationStatus.done
-    operation.validated_at = now()
+    operation.validated_at = stamp
     db.flush()
     return operation
 
