@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEV_SECRET_KEY = "dev-insecure-secret-change-me"
+DEV_SECRET_KEY = "dev-insecure-secret-change-me-before-production"
 
 
 class Settings(BaseSettings):
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None
     SMTP_PASSWORD: str | None = None
-    SMTP_FROM: str = "no-reply@stocksense.local"
+    SMTP_FROM: str = "no-reply@stocksense.example"
     SMTP_TLS: bool = True
 
     # Comma-separated. Kept as a plain string because pydantic-settings parses

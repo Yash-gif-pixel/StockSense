@@ -17,7 +17,7 @@ is the only module allowed to write either table.
 
 ```bash
 # from the repo root
-docker compose up -d                 # dev DB on :5432, test DB on :5433
+docker compose up -d --wait          # dev DB on :5432, test DB on :5433 (waits for healthy)
 cp .env.example backend/.env         # the backend reads .env from backend/
 
 cd backend
@@ -41,6 +41,13 @@ The Vite frontend runs on :5173 and proxies `/api` here; `CORS_ORIGINS` also all
 directly with credentials.
 
 Demo login after seeding: `demo_user` / `Demo@12345`
+
+```bash
+curl -c jar -X POST http://localhost:8000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"login_id":"demo_user","password":"Demo@12345"}'
+curl -b jar http://localhost:8000/api/auth/me
+```
 
 ## Tests
 

@@ -33,8 +33,15 @@ class Warehouse(Base):
 class Location(Base):
     __tablename__ = "locations"
     __table_args__ = (
-        # NULL warehouse_id (virtual locations) is exempt: Postgres treats NULLs as distinct.
         UniqueConstraint("warehouse_id", "short_code", name="uq_locations_warehouse_short_code"),
+        # The constraint above does not cover virtual locations, because Postgres treats
+        # NULL warehouse_id values as distinct. This partial index closes that gap.
+        Index(
+            "uq_locations_virtual_short_code",
+            "short_code",
+            unique=True,
+            postgresql_where=text("warehouse_id IS NULL"),
+        ),
         Index("ix_locations_warehouse_id", "warehouse_id"),
         Index("ix_locations_type", "type"),
     )

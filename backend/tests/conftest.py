@@ -73,3 +73,43 @@ def client(db: Session) -> Generator["TestClient", None, None]:  # noqa: F821
             yield test_client
     finally:
         app.dependency_overrides.clear()
+
+
+CREDENTIALS = {
+    "login_id": "demo_user",
+    "email": "demo@example.com",
+    "password": "Valid@Pass1",
+}
+
+
+@pytest.fixture
+def credentials() -> dict[str, str]:
+    return dict(CREDENTIALS)
+
+
+@pytest.fixture
+def registered_client(client, credentials):
+    response = client.post("/api/auth/signup", json=credentials)
+    assert response.status_code == 201, response.text
+    return client
+
+
+@pytest.fixture
+def logged_in_client(registered_client, credentials):
+    response = registered_client.post(
+        "/api/auth/login",
+        json={"login_id": credentials["login_id"], "password": credentials["password"]},
+    )
+    assert response.status_code == 200, response.text
+    return registered_client
+
+
+@pytest.fixture
+def sent_otps(monkeypatch) -> list[tuple[str, str]]:
+    """Capture what would have been emailed. The router calls mail.send_otp_email
+    through the module, so patching the attribute here is what the app sees."""
+    from app.services import mail
+
+    sent: list[tuple[str, str]] = []
+    monkeypatch.setattr(mail, "send_otp_email", lambda to, otp: sent.append((to, otp)))
+    return sent

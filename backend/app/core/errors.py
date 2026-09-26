@@ -63,6 +63,21 @@ class InsufficientStockError(DomainError):
     message = "Not enough stock available"
 
 
+class BadRequestError(DomainError):
+    """422 is for request-shape problems; this is for a well-formed request the
+    server rejects, e.g. a wrong current_password."""
+
+    code = "validation_error"
+    status_code = 400
+    message = "Request could not be completed"
+
+
+class InvalidOtpError(DomainError):
+    code = "invalid_otp"
+    status_code = 400
+    message = "The code is invalid or has expired"
+
+
 # Status codes FastAPI/Starlette may raise on their own, mapped to contract codes.
 _STATUS_CODES = {
     400: "validation_error",
@@ -109,7 +124,10 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
 
 async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
-    fields = {_field_path(err["loc"]): err["msg"] for err in exc.errors()}
+    fields = {
+        _field_path(err["loc"]): err["msg"].removeprefix("Value error, ")
+        for err in exc.errors()
+    }
     return error_response(422, "validation_error", "Validation failed", fields)
 
 

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api import auth
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.errors import register_error_handlers
@@ -18,6 +19,8 @@ app.add_middleware(
 )
 
 register_error_handlers(app)
+
+app.include_router(auth.router)
 
 
 @app.get("/api/health")

@@ -26,7 +26,7 @@ from app.models import (
 
 DEMO_USER = {
     "login_id": "demo_user",
-    "email": "demo@stocksense.local",
+    "email": "demo@stocksense.example",
     "password": "Demo@12345",
 }
 
